@@ -1,6 +1,7 @@
 #ifndef RECOGNIZER_H
 #define RECOGNIZER_H
 
+#include <uv.h>
 #include <v8.h>
 #include <node.h>
 #include <node_buffer.h>

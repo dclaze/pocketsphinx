@@ -34,28 +34,10 @@ void Recognizer::Init(Handle<Object> exports) {
     NODE_SET_PROTOTYPE_METHOD(tpl, "addKeywordsSearch", AddKeywordsSearch);
     NODE_SET_PROTOTYPE_METHOD(tpl, "addGrammarSearch", AddGrammarSearch);
     NODE_SET_PROTOTYPE_METHOD(tpl, "addNgramSearch", AddNgramSearch);
-    //NODE_SET_PROTOTYPE_METHOD(tpl, "search", Search);
+
     NODE_SET_PROTOTYPE_METHOD(tpl, "write", Write);
     NODE_SET_PROTOTYPE_METHOD(tpl, "writeSync", WriteSync);
-    /*
-    // Static Methods and Properties
-    tpl->Set(String::NewSymbol("fromFloat"), FunctionTemplate::New(FromFloat)->GetFunction());
-    tpl->Set(String::NewSymbol("modelDirectory"), String::NewSymbol(MODELDIR));
-
-    // Prototype Methods and Properies
-    tpl->PrototypeTemplate()->Set(String::NewSymbol("start"), FunctionTemplate::New(Start)->GetFunction());
-    tpl->PrototypeTemplate()->Set(String::NewSymbol("stop"), FunctionTemplate::New(Stop)->GetFunction());
-    tpl->PrototypeTemplate()->Set(String::NewSymbol("restart"), FunctionTemplate::New(Restart)->GetFunction());
-
-    tpl->PrototypeTemplate()->Set(String::NewSymbol("addKeyphraseSearch"), FunctionTemplate::New(AddKeyphraseSearch)->GetFunction());
-    tpl->PrototypeTemplate()->Set(String::NewSymbol("addKeywordsSearch"), FunctionTemplate::New(AddKeywordsSearch)->GetFunction());
-    tpl->PrototypeTemplate()->Set(String::NewSymbol("addGrammarSearch"), FunctionTemplate::New(AddGrammarSearch)->GetFunction());
-    tpl->PrototypeTemplate()->Set(String::NewSymbol("addNgramSearch"), FunctionTemplate::New(AddNgramSearch)->GetFunction());
-
-
-    tpl->PrototypeTemplate()->Set(String::NewSymbol("write"), FunctionTemplate::New(Write)->GetFunction());
-    tpl->PrototypeTemplate()->Set(String::NewSymbol("writeSync"), FunctionTemplate::New(WriteSync)->GetFunction());
-    */
+    
     constructor.Reset(isolate, tpl->GetFunction());
     exports->Set(String::NewFromUtf8(isolate, "Recognizer"), tpl->GetFunction());
 }
@@ -221,7 +203,6 @@ void Recognizer::GetSearch(Local<String> property, const PropertyCallbackInfo<Va
 }
 
 void Recognizer::SetSearch(Local<String> property, Local<Value> value, const PropertyCallbackInfo<void>& args) {
-    Isolate* isolate = Isolate::GetCurrent();
     Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.This());
 
     String::Utf8Value search(value);

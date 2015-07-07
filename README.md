@@ -8,9 +8,8 @@ This module aims to allow basic speech recognition on portable devices through t
 ```javascript
 var PocketSphinx = require('pocketsphinx');
 
-var ps = new PocketSphinx({
+var ps = new PocketSphinx.Recognizer({
 	hmm: '/file/path',
-	lm: '/file/path',
 	dict: '/file/path',
 	samprate: 16000,
 	nfft: 512

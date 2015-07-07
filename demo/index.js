@@ -14,7 +14,7 @@ var server = http.Server(app),
 	io = socket_io(server);
 
 io.on('connection', function(socket) {
-	var sphinx = new PocketSphinx({
+	var sphinx = new PocketSphinx.Recognizer({
 		samprate: '16000'
 	}, function(err, hypothesis, score) {
 		if(err) console.error(err);
@@ -29,12 +29,16 @@ io.on('connection', function(socket) {
 	socket.emit('ready');
 
 	socket.on('audio', function(data) {
-		var resampled = PocketSphinx.fromFloat(data);
+		var resampled = sphinx.fromFloat(data);
 		sphinx.writeSync(resampled);
 	});
 
 	socket.on('restart', function() {
 		sphinx.restart();
+	});
+
+	socket.on('error', function(error) {
+		console.error('An error occured', error);
 	});
 });
 
