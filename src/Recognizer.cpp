@@ -87,14 +87,14 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 		Default(options->Get(String::NewFromUtf8(isolate,"-dict")), String::NewFromUtf8(isolate, MODELDIR "/en-us/cmudict-en-us.dict"))
 	);
 	// For some reason when passing -samprate or -agcthresh (maybe more) the values will be set wrong and some weird values are added
-	/*options->Set(
+	options->Set(
 		String::NewFromUtf8(isolate,"-samprate"),
-		Default(options->Get(String::NewFromUtf8(isolate,"-samprate")), String::NewFromUtf8(isolate, "16000"))
-	);*/
-	/*options->Set(
+		Default(options->Get(String::NewFromUtf8(isolate,"-samprate")), Number::New(isolate, 44100))
+	);
+	options->Set(
 		String::NewFromUtf8(isolate,"-nfft"),
-		Default(options->Get(String::NewFromUtf8(isolate,"-nfft")), String::NewFromUtf8(isolate, "2048"))
-	);*/
+		Default(options->Get(String::NewFromUtf8(isolate,"-nfft")), Number::New(isolate, 2048))
+	);
 
 	// Add all parameters to the config
 	Local<Array> propertyNames = options->GetOwnPropertyNames();
@@ -124,7 +124,8 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 			} else if(val->IsNumber()) {
 				double num_val = double(val->NumberValue());
 				// Check if the number is a float or int
-				if (val->IsInt32() || val->IsUint32()) {
+				bool isInt = (val->IsInt32() || val->IsUint32());
+				if (isInt && strcmp(*utf8_key, "-samprate")!=0) {
 					//TODO: Fix the weird bug with -samprate 16000 always getting 
 					cmd_ln_set_int_r(config, *utf8_key, (long)num_val);
 				} else {
@@ -134,12 +135,12 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 			// Add boolean values
 			} else if(val->IsBoolean()) {
 				bool bool_val = bool(val->BooleanValue());
-				cout << "Adding boolean " << *utf8_key << " val " << bool_val << endl;
 				cmd_ln_set_boolean_r(config, *utf8_key, bool_val);
 
 			// Some other unknown value type was found
 			} else {
-				isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Unknown value type")));
+				Local<String> err = String::Concat(String::NewFromUtf8(isolate, "Unknown value type for key: "), String::NewFromUtf8(isolate, *utf8_key));
+				isolate->ThrowException(Exception::TypeError(err));
 				args.GetReturnValue().Set(args.Holder());
 			}
 		} else {
@@ -148,18 +149,7 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 		}
 	}
 
-	/*String::Utf8Value hmmValue(Default(options->Get(String::NewFromUtf8(isolate,"hmm")), String::NewFromUtf8(isolate,MODELDIR "/en-us/en-us")));
-	String::Utf8Value dictValue(Default(options->Get(String::NewFromUtf8(isolate,"dict")), String::NewFromUtf8(isolate,MODELDIR "/en-us/cmudict-en-us.dict")));
-	String::Utf8Value samprateValue(Default(options->Get(String::NewFromUtf8(isolate,"samprate")), String::NewFromUtf8(isolate,"44100")));
-	String::Utf8Value nfftValue(Default(options->Get(String::NewFromUtf8(isolate,"nfft")), String::NewFromUtf8(isolate,"2048")));
-
-	cmd_ln_t* config = cmd_ln_init(NULL, ps_args(), TRUE,
-			"-hmm", *hmmValue,
-			"-dict", *dictValue,
-			"-samprate", *samprateValue,
-			"-nfft", *nfftValue,
-			NULL);*/
-
+	// Add the configuration to the decoder instance
 	instance->ps = ps_init(config);
 
 	instance->Wrap(args.Holder());
@@ -387,20 +377,20 @@ void Recognizer::WriteSync(const FunctionCallbackInfo<Value>& args) {
 	int32 score;
 	const char* hyp = ps_get_hyp(instance->ps, &score);
 
-	double t_speech;
-	double t_cpu;
-	double t_wall;
+	//double t_speech;
+	//double t_cpu;
+	//double t_wall;
 
-	ps_get_all_time(instance->ps, &t_speech, &t_cpu, &t_wall);
+	//ps_get_all_time(instance->ps, &t_speech, &t_cpu, &t_wall);
 
-	double total_time = ps_get_n_frames(instance->ps) / 100.0;
-	double silence_time = total_time - t_speech;
+	//double total_time = ps_get_n_frames(instance->ps) / 100.0;
+	//double silence_time = total_time - t_speech;
 
-	if (ps_get_in_speech(instance->ps)==1) {
+	/*if (ps_get_in_speech(instance->ps)==1) {
 		cout << "Last buffer contained speech... times: speech(" << t_speech << ") of total(" << total_time << ") silence(" << silence_time << ")" << endl;
 	} else {
 		cout << "No speech in last buffer... times: speech(" << t_speech << ") of total(" << total_time << ") silence(" << silence_time << ")" << endl;
-	}
+	}*/
 
 	Handle<Value> argv[3] = { Null(isolate), hyp ? String::NewFromUtf8(isolate,hyp) : String::NewFromUtf8(isolate, ""), NumberObject::New(isolate,score)};
 	Local<Function> cb = Local<Function>::New(isolate, instance->callback);
