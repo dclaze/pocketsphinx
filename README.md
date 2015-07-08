@@ -9,10 +9,10 @@ This module aims to allow basic speech recognition on portable devices through t
 var PocketSphinx = require('pocketsphinx');
 
 var ps = new PocketSphinx.Recognizer({
-	hmm: '/file/path',
-	dict: '/file/path',
-	samprate: 16000,
-	nfft: 512
+	'-hmm': '/file/path',
+	'-dict': '/file/path',
+	'-nfft': 512,
+	'-remove_silence': false	
 }, function(err, hypothesis, score) {
 
 });

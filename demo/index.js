@@ -14,8 +14,11 @@ var server = http.Server(app),
 	io = socket_io(server);
 
 io.on('connection', function(socket) {
+
+	// The values need to be added with the correct type 
+	// e.g.: -hmm as String, -nfft as Integet, -wbeam as Float and -remove_silence as Boolean
 	var sphinx = new PocketSphinx.Recognizer({
-		samprate: '16000'
+		'-nfft': 2048
 	}, function(err, hypothesis, score) {
 		if(err) console.error(err);
 		socket.emit('utterance', { phrase: hypothesis, score: score });
