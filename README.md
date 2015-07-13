@@ -1,7 +1,14 @@
 # PocketSphinx for Node.js
 **A Node.js Binding for PocketSphinx**
 
-This module aims to allow basic speech recognition on portable devices through the use of PocketSphinx. Much of its API is based on the [PocketSphinx WP Demo](https://github.com/cmusphinx/pocketsphinx-wp-demo) application and it aims to provide enough functionality for basic speech recognition tasks.
+This module aims to allow basic speech recognition on portable devices through the use of PocketSphinx. It is possible to either use buffer chunks for live recognition or pass audio buffers with the complete audio to PocketSphinx to decode.
+
+## Prerequisites
+
+To build the node extension you have to install Sphinxbase and PocketSphinx from the repositories preferably:
+
+* [Sphinxbase repository](https://github.com/cmusphinx/sphinxbase)
+* [PocketSphinx repository](https://github.com/cmusphinx/pocketsphinx)
 
 ## Example
 
@@ -27,4 +34,60 @@ ps.search = "keyphrase_name";
 ps.start();
 ps.write(data);
 ps.stop();
+```
+
+## Options
+
+You can pass any valid PocketSphinx parameter you could e.g. pass to pocketsphinx_continuous but you have to assure you're using the correct type for the parameter. If you are for example pass '-samprate' as a string like '44100.0' the configuration will fail. In the following list you can see some of the probably most required options with their required data type:
+
+option | type | default | description
+-------|------|---------|------------
+`-samprate` | float | `44100.0` | The sample rate of the passed data
+`-hmm` | string | `modelDirectory` + `"/en-us/en-us"` | The hmm model directory
+`-dict` | string | `modelDirectory` + `"/en-us/cmudict-en-us.dict"` | The dictionary file directory
+`-nfft` | int | `2048` | The nfft value
+For more options you can look into the manual of pocketsphinx_continuous with `$ man pocketsphinx_continuous`
+
+
+## Methods
+
+The PocketSphinx Object itself has the properties
+
+* `Recognizer(options, callback)` - Creates a new Recognizer instance
+* `modelDirectory` - The default model directory
+* `fromFloat(buffer)` - Resamples javascript audio buffers to use with PocketSphinx
+
+A Recognizer instance has the following methods:
+
+* `start()` - Starts the decoder
+* `stop()` - Stops the decoder
+* `restart()` - Restarts the decoder
+* `reconfig(options, callback)` - Reconfigures the decoder without having to reload it
+* `addKeyphraseSearch(name, keyphrase)` - Adds a keyphrase search
+* `addKeywordsSearch(name, keywordFile)` - Adds a keyword search
+* `addGrammarSearch(name, jsgfFile)` - Adds a jsgf search
+* `addNgramSearch(name, nGramFile)` - Adds a nGram search
+* `write(buffer)` - Decodes a complete audio buffer
+* `writeSync(buffer)` - Decodes the next audio buffer chunk
+
+## Specify a search
+
+To specify a search you can use one of the add functions mentioned in the methods section above and then add the name to the instance's search accessor like so:
+
+```javascript
+ps.addGrammarSearch('someSearch', 'digits.gram');
+ps.search = 'someSearch';
+ps.start();
+```
+
+Or you can pass e.g. a language model file, a jsgf grammar or a keyword file directly with the Recognizer options or reconfigure the Recognizer with such options at runtime:
+
+```javascript
+var ps = new PocketSphinx.Recognizer({
+	'-lm': '/path/myFancyLanguageModel' // This adds an nGrammSearch
+}, function(err, hypothesis, score) {
+	if(err) console.error(err);
+	console.log('Hypothesis: ', hypothesis);
+});
+ps.start();
 ```

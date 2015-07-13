@@ -23,13 +23,14 @@ void Recognizer::Init(Handle<Object> exports) {
 	tpl->SetClassName(String::NewFromUtf8(isolate,"Recognizer"));
 	tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
-	//tpl->Set(String::NewFromUtf8(isolate, "fromFloat"), FunctionTemplate::New(isolate, FromFloat)->GetFunction());
 	tpl->Set(String::NewFromUtf8(isolate, "modelDirectory"), String::NewFromUtf8(isolate, MODELDIR));
 	tpl->PrototypeTemplate()->SetAccessor(String::NewFromUtf8(isolate, "search"), GetSearch, SetSearch);
+
+	NODE_SET_PROTOTYPE_METHOD(tpl, "reconfig", Reconfig);
+
 	NODE_SET_PROTOTYPE_METHOD(tpl, "start", Start);
 	NODE_SET_PROTOTYPE_METHOD(tpl, "stop", Stop);
 	NODE_SET_PROTOTYPE_METHOD(tpl, "restart", Restart);
-	NODE_SET_PROTOTYPE_METHOD(tpl, "fromFloat", FromFloat);
 	NODE_SET_PROTOTYPE_METHOD(tpl, "addKeyphraseSearch", AddKeyphraseSearch);
 	NODE_SET_PROTOTYPE_METHOD(tpl, "addKeywordsSearch", AddKeywordsSearch);
 	NODE_SET_PROTOTYPE_METHOD(tpl, "addGrammarSearch", AddGrammarSearch);
@@ -37,9 +38,14 @@ void Recognizer::Init(Handle<Object> exports) {
 
 	NODE_SET_PROTOTYPE_METHOD(tpl, "write", Write);
 	NODE_SET_PROTOTYPE_METHOD(tpl, "writeSync", WriteSync);
+
+	// @deprecated fromFloat should be called directly like PocketSphinx.fromFloat(buffer)
+	NODE_SET_PROTOTYPE_METHOD(tpl, "fromFloat", FromFloat);
 	
 	constructor.Reset(isolate, tpl->GetFunction());
 	exports->Set(String::NewFromUtf8(isolate, "Recognizer"), tpl->GetFunction());
+
+	NODE_SET_METHOD(exports, "fromFloat", FromFloat);
 }
 
 void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
@@ -70,89 +76,63 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 
 	Recognizer* instance = new Recognizer();
 
+	// Add the configuration to the decoder instance
 	Handle<Object> options = args[0]->ToObject();
+	cmd_ln_t* config = BuildConfig(options);
+	instance->ps = ps_init(config);
+
+	// Set callback method
 	Local<Function> cb = Local<Function>::Cast(args[1]);
 	instance->callback.Reset(isolate, cb);
 
-	// Create an empty command line config
-	cmd_ln_t* config = cmd_ln_init(NULL, ps_args(), TRUE, NULL);
+	// Set processing to false initially
+	instance->processing = false;
 
-	// Add default parameters if they do not exist
-	options->Set(
-		String::NewFromUtf8(isolate,"-hmm"),
-		Default(options->Get(String::NewFromUtf8(isolate,"-hmm")), String::NewFromUtf8(isolate, MODELDIR "/en-us/en-us"))
-	);
-	options->Set(
-		String::NewFromUtf8(isolate,"-dict"),
-		Default(options->Get(String::NewFromUtf8(isolate,"-dict")), String::NewFromUtf8(isolate, MODELDIR "/en-us/cmudict-en-us.dict"))
-	);
-	// For some reason when passing -samprate or -agcthresh (maybe more) the values will be set wrong and some weird values are added
-	options->Set(
-		String::NewFromUtf8(isolate,"-samprate"),
-		Default(options->Get(String::NewFromUtf8(isolate,"-samprate")), Number::New(isolate, 44100))
-	);
-	options->Set(
-		String::NewFromUtf8(isolate,"-nfft"),
-		Default(options->Get(String::NewFromUtf8(isolate,"-nfft")), Number::New(isolate, 2048))
-	);
+	instance->Wrap(args.Holder());
 
-	// Add all parameters to the config
-	Local<Array> propertyNames = options->GetOwnPropertyNames();
-	for (uint32_t i = 0; i < propertyNames->Length(); ++i)
-	{
-		Local<Value> key = propertyNames->Get(i);
-		Local<Value> val = options->Get(key);
+	args.GetReturnValue().Set(args.Holder());
+}
 
-		if (key->IsString()) {
+void Recognizer::Reconfig(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
+	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
-			String::Utf8Value utf8_key(key);
-			// Check if the key is valid
-			anytype_t *ps_val;
-			ps_val = cmd_ln_access_r(config, *utf8_key);
-			if (ps_val == NULL) {
-				Local<String> err = String::Concat(String::NewFromUtf8(isolate, "Unknown pocketsphinx argument: "), String::NewFromUtf8(isolate, *utf8_key));
-				isolate->ThrowException(Exception::TypeError(err));
-				args.GetReturnValue().Set(args.Holder());
-			}
+	if(args.Length() < 2) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected options and callback")));
+		args.GetReturnValue().Set(Undefined(isolate));
+	}
 
-			// Add String values
-			if (val->IsString()) {
-				String::Utf8Value utf8_val(val);
-				cmd_ln_set_str_r(config, *utf8_key, *utf8_val);
+	if(!args[0]->IsObject()) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected options to be an object")));
+		args.GetReturnValue().Set(Undefined(isolate));
+	}
 
-			// Add numeric values
-			} else if(val->IsNumber()) {
-				double num_val = double(val->NumberValue());
-				// Check if the number is a float or int
-				bool isInt = (val->IsInt32() || val->IsUint32());
-				if (isInt && strcmp(*utf8_key, "-samprate")!=0) {
-					//TODO: Fix the weird bug with -samprate 16000 always getting 
-					cmd_ln_set_int_r(config, *utf8_key, (long)num_val);
-				} else {
-					cmd_ln_set_float_r(config, *utf8_key, num_val);
-				}
+	if(!args[1]->IsFunction()) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected callback to be a function")));
+		args.GetReturnValue().Set(Undefined(isolate));
+	}
 
-			// Add boolean values
-			} else if(val->IsBoolean()) {
-				bool bool_val = bool(val->BooleanValue());
-				cmd_ln_set_boolean_r(config, *utf8_key, bool_val);
+	// Remind state
+	bool wasProcessing = instance->processing;
+	instance->processing = false;
 
-			// Some other unknown value type was found
-			} else {
-				Local<String> err = String::Concat(String::NewFromUtf8(isolate, "Unknown value type for key: "), String::NewFromUtf8(isolate, *utf8_key));
-				isolate->ThrowException(Exception::TypeError(err));
-				args.GetReturnValue().Set(args.Holder());
-			}
-		} else {
-			isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "All argument keys must be strings")));
-			args.GetReturnValue().Set(args.Holder());
+	// Add the configuration to the decoder instance
+	Handle<Object> options = args[0]->ToObject();
+	cmd_ln_t* config = BuildConfig(options);
+	if(ps_reinit(instance->ps, config)<0) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Could not reinit decoder")));
+		args.GetReturnValue().Set(Undefined(isolate));
+	} else {
+		// Restart decoding when the decoder was running before
+		if(wasProcessing) {
+			Start(args);
 		}
 	}
 
-	// Add the configuration to the decoder instance
-	instance->ps = ps_init(config);
-
-	instance->Wrap(args.Holder());
+	// Overwrite callback method
+	Local<Function> cb = Local<Function>::Cast(args[1]);
+	instance->callback.Reset(isolate, cb);
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -163,12 +143,12 @@ void Recognizer::AddKeyphraseSearch(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 2) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Incorrect number of arguments, expected name and keyphrase")));
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and keyphrase")));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
 	if(!args[0]->IsString() || !args[1]->IsString()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Expected both name and keyphrase to be strings")));
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and keyphrase to be strings")));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
@@ -177,7 +157,7 @@ void Recognizer::AddKeyphraseSearch(const FunctionCallbackInfo<Value>& args) {
 
 	int result = ps_set_keyphrase(instance->ps, *name, *keyphrase);
 	if(result < 0)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to add keyphrase search to recognizer")));
+		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add keyphrase search to recognizer")));
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -188,12 +168,12 @@ void Recognizer::AddKeywordsSearch(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 2) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Incorrect number of arguments, expected name and file")));
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file")));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
 	if(!args[0]->IsString() || !args[1]->IsString()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Expected both name and file to be strings")));
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and file to be strings")));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
@@ -202,7 +182,7 @@ void Recognizer::AddKeywordsSearch(const FunctionCallbackInfo<Value>& args) {
 
 	int result = ps_set_kws(instance->ps, *name, *file);
 	if(result < 0)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to add keywords search to recognizer")));
+		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add keywords search to recognizer")));
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -213,12 +193,12 @@ void Recognizer::AddGrammarSearch(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 2) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Incorrect number of arguments, expected name and file")));
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file")));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
 	if(!args[0]->IsString() || !args[1]->IsString()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Expected both name and file to be strings")));
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and file to be strings")));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
@@ -227,7 +207,7 @@ void Recognizer::AddGrammarSearch(const FunctionCallbackInfo<Value>& args) {
 
 	int result = ps_set_jsgf_file(instance->ps, *name, *file);
 	if(result < 0)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to add grammar search to recognizer")));
+		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add grammar search to recognizer")));
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -238,12 +218,12 @@ void Recognizer::AddNgramSearch(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 2) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Incorrect number of arguments, expected name and file")));
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file")));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
 	if(!args[0]->IsString() || !args[1]->IsString()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Expected both name and file to be strings")));
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and file to be strings")));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
@@ -252,7 +232,7 @@ void Recognizer::AddNgramSearch(const FunctionCallbackInfo<Value>& args) {
 
 	int result = ps_set_lm_file(instance->ps, *name, *file);
 	if(result < 0)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to add Ngram search to recognizer")));
+		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add Ngram search to recognizer")));
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -280,20 +260,48 @@ void Recognizer::Start(const FunctionCallbackInfo<Value>& args) {
 	Isolate* isolate = Isolate::GetCurrent();
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
-	int result = ps_start_utt(instance->ps);
-	if(result)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to start PocketSphinx processing")));
+	if(instance->processing == false) {
+		int result = ps_start_utt(instance->ps);
+		if(result) {
+			isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to start PocketSphinx processing")));
+		} else {
+			//cout << "Utt successfully started..." << endl;
+			instance->processing = true;
+		}
+	} else {
+		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "PocketSphinx processing seems to run already")));
+	}
 
 	args.GetReturnValue().Set(args.Holder());
+
+	// Repeat the first decoding after CMN estimations are calculated
+	//instance->isFirstDecoding = true;
 }
 
 void Recognizer::Stop(const FunctionCallbackInfo<Value>& args) {
 	Isolate* isolate = Isolate::GetCurrent();
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
-	int result = ps_end_utt(instance->ps);
-	if(result)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to end PocketSphinx processing")));
+	if(instance->processing == true) {
+		// Fetch the final hypothesis if first arg is true
+		if(args.Length() > 0 && args[0]->IsBoolean() && args[0]->BooleanValue() == true) {
+			int32 score;
+			const char* hyp = ps_get_hyp(instance->ps, &score);
+
+			Handle<Value> argv[3] = { Null(isolate), hyp ? String::NewFromUtf8(isolate,hyp) : String::NewFromUtf8(isolate, ""), NumberObject::New(isolate,score)};
+			Local<Function> cb = Local<Function>::New(isolate, instance->callback);
+			cb->Call(isolate->GetCurrentContext()->Global(), 3, argv);
+		}
+
+		// End the utterance
+		int result = ps_end_utt(instance->ps);
+		if(result){
+			isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to end PocketSphinx processing")));
+		} else {
+			//cout << "Utt successfully stopped..." << endl;
+			instance->processing = false;
+		}
+	}
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -302,13 +310,47 @@ void Recognizer::Restart(const FunctionCallbackInfo<Value>& args) {
 	Isolate* isolate = Isolate::GetCurrent();
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
-	int result = ps_start_utt(instance->ps);
+	if(instance->processing == true) {
+		// Try stop processing
+		int result = ps_end_utt(instance->ps);
+		if(result) {
+			isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to restart PocketSphinx processing")));
+		} else {
+			instance->processing = false;
+			//cout << "Utt successfully stopped..." << endl;
+
+			// Restart it now that it's stopped
+			Start(args);
+			/*int result = ps_start_utt(instance->ps);
+			if(result) {
+				isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to start PocketSphinx processing")));
+			} else {
+				instance->processing = true;
+				cout << "Utt successfully restarted..." << endl;
+			}*/
+
+		}
+	} else {
+		// Start processing
+		Start(args);
+		/*
+		int result = ps_start_utt(instance->ps);
+		if(result) {
+			isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to start PocketSphinx processing")));
+		} else {
+			instance->processing = true;
+			cout << "Utt successfully started..." << endl;
+		}*/
+	}
+
+	/*int result = ps_start_utt(instance->ps);
 	if(result)
 		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to start PocketSphinx processing")));
 
 	result = ps_end_utt(instance->ps);
 	if(result)
 		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to restart PocketSphinx processing")));
+	*/
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -349,6 +391,12 @@ void Recognizer::WriteSync(const FunctionCallbackInfo<Value>& args) {
 	HandleScope scope(isolate);
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
+	// Skip the buffer when not processing
+	if(instance->processing == false) {
+		//cout << "Buffer recieved but not running..." << endl;
+		return;
+	}
+
 	Handle<Object> buffer = args[0]->ToObject();
 
 	if(!args.Length()) {
@@ -367,12 +415,22 @@ void Recognizer::WriteSync(const FunctionCallbackInfo<Value>& args) {
 	size_t length = node::Buffer::Length(buffer) / sizeof(int16);
 
 	if(ps_process_raw(instance->ps, data, length, FALSE, FALSE) < 0) {
-		cout << "Error3" << endl;
 		Handle<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate,"Failed to process audio data")) };
 		Local<Function> cb = Local<Function>::New(isolate, instance->callback);
 		cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
 		args.GetReturnValue().Set(args.Holder());
 	}
+
+	// Repeat the first decoding after CMN estimations are calculated
+	/*if(ps_get_in_speech(instance->ps)==1 && instance->isFirstDecoding) {
+		instance->isFirstDecoding = false;
+		if(ps_process_raw(instance->ps, data, length, FALSE, FALSE) < 0) {
+			Handle<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate,"Failed to process audio data in second decoding phase")) };
+			Local<Function> cb = Local<Function>::New(isolate, instance->callback);
+			cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
+			args.GetReturnValue().Set(args.Holder());
+		}
+	}*/
 
 	int32 score;
 	const char* hyp = ps_get_hyp(instance->ps, &score);
@@ -435,6 +493,85 @@ void Recognizer::AsyncAfter(uv_work_t* request) {
 Local<Value> Recognizer::Default(Local<Value> value, Local<Value> fallback) {
 	if(value->IsUndefined()) return fallback;
 	return value;
+}
+
+cmd_ln_t* Recognizer::BuildConfig(Handle<Object> options) {
+
+	Isolate* isolate = Isolate::GetCurrent();
+
+	// Create an empty command line config
+	cmd_ln_t* config = cmd_ln_init(NULL, ps_args(), TRUE, NULL);
+
+	// Add default parameters if they do not exist
+	options->Set(
+		String::NewFromUtf8(isolate,"-hmm"),
+		Default(options->Get(String::NewFromUtf8(isolate,"-hmm")), String::NewFromUtf8(isolate, MODELDIR "/en-us/en-us"))
+	);
+	options->Set(
+		String::NewFromUtf8(isolate,"-dict"),
+		Default(options->Get(String::NewFromUtf8(isolate,"-dict")), String::NewFromUtf8(isolate, MODELDIR "/en-us/cmudict-en-us.dict"))
+	);
+	// For some reason when passing -samprate or -agcthresh (maybe more) the values will be set wrong and some weird values are added
+	options->Set(
+		String::NewFromUtf8(isolate,"-samprate"),
+		Default(options->Get(String::NewFromUtf8(isolate,"-samprate")), Number::New(isolate, 44100))
+	);
+	options->Set(
+		String::NewFromUtf8(isolate,"-nfft"),
+		Default(options->Get(String::NewFromUtf8(isolate,"-nfft")), Number::New(isolate, 2048))
+	);
+
+	// Add all parameters to the config
+	Local<Array> propertyNames = options->GetOwnPropertyNames();
+	for (uint32_t i = 0; i < propertyNames->Length(); ++i)
+	{
+		Local<Value> key = propertyNames->Get(i);
+		Local<Value> val = options->Get(key);
+
+		if (key->IsString()) {
+
+			String::Utf8Value utf8_key(key);
+			// Check if the key is valid
+			anytype_t *ps_val;
+			ps_val = cmd_ln_access_r(config, *utf8_key);
+			if (ps_val == NULL) {
+				Local<String> err = String::Concat(String::NewFromUtf8(isolate, "Unknown pocketsphinx argument: "), String::NewFromUtf8(isolate, *utf8_key));
+				isolate->ThrowException(Exception::TypeError(err));
+			}
+
+			// Add String values
+			if (val->IsString()) {
+				String::Utf8Value utf8_val(val);
+				cmd_ln_set_str_r(config, *utf8_key, *utf8_val);
+
+			// Add numeric values
+			} else if(val->IsNumber()) {
+				double num_val = double(val->NumberValue());
+				// Check if the number is a float or int
+				bool isInt = (val->IsInt32() || val->IsUint32());
+				if (isInt && strcmp(*utf8_key, "-samprate")!=0) {
+					//TODO: Fix the weird bug with -samprate 16000 always getting 
+					cmd_ln_set_int_r(config, *utf8_key, (long)num_val);
+				} else {
+					cmd_ln_set_float_r(config, *utf8_key, num_val);
+				}
+
+			// Add boolean values
+			} else if(val->IsBoolean()) {
+				bool bool_val = bool(val->BooleanValue());
+				cmd_ln_set_boolean_r(config, *utf8_key, bool_val);
+
+			// Some other unknown value type was found
+			} else {
+				Local<String> err = String::Concat(String::NewFromUtf8(isolate, "Unknown value type for key: "), String::NewFromUtf8(isolate, *utf8_key));
+				isolate->ThrowException(Exception::TypeError(err));
+			}
+		} else {
+			isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "All argument keys must be strings")));
+		}
+	}
+
+	return config;
 }
 
 void Recognizer::FromFloat(const FunctionCallbackInfo<Value>& args) {

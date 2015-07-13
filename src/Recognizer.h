@@ -20,6 +20,7 @@ private:
 	~Recognizer();
 
 	static void New(const v8::FunctionCallbackInfo<v8::Value>&);
+	static void Reconfig(const v8::FunctionCallbackInfo<v8::Value>&);
 
 	static void Start(const v8::FunctionCallbackInfo<v8::Value>&);
 	static void Stop(const v8::FunctionCallbackInfo<v8::Value>&);
@@ -43,9 +44,12 @@ private:
 	static void AsyncAfter(uv_work_t* request);
 
 	static v8::Local<v8::Value> Default(v8::Local<v8::Value> value, v8::Local<v8::Value> fallback);
+	static cmd_ln_t* BuildConfig(v8::Handle<v8::Object> options);
 
 	ps_decoder_t* ps;
 	v8::Persistent<v8::Function> callback;
+	bool processing;
+	//bool isFirstDecoding;
 };
 
 typedef struct AsyncData {
