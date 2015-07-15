@@ -27,6 +27,10 @@ void Recognizer::Init(Handle<Object> exports) {
 	tpl->PrototypeTemplate()->SetAccessor(String::NewFromUtf8(isolate, "search"), GetSearch, SetSearch);
 
 	NODE_SET_PROTOTYPE_METHOD(tpl, "reconfig", Reconfig);
+	NODE_SET_PROTOTYPE_METHOD(tpl, "silenceDetection", SilenceDetection);
+
+	NODE_SET_PROTOTYPE_METHOD(tpl, "on", On);
+	NODE_SET_PROTOTYPE_METHOD(tpl, "off", Off);
 
 	NODE_SET_PROTOTYPE_METHOD(tpl, "start", Start);
 	NODE_SET_PROTOTYPE_METHOD(tpl, "stop", Stop);
@@ -59,18 +63,13 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 		args.GetReturnValue().Set(cons->NewInstance(argc, argv));
 	}
 
-	if(args.Length() < 2) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Incorrect number of arguments, expected options and callback")));
+	if(args.Length() < 1) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Incorrect number of arguments, expected options at least")));
 		args.GetReturnValue().Set(Undefined(isolate));
 	}
 
 	if(!args[0]->IsObject()) {
 		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Expected options to be an object")));
-		args.GetReturnValue().Set(Undefined(isolate));
-	}
-
-	if(!args[1]->IsFunction()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Expected callback to be a function")));
 		args.GetReturnValue().Set(Undefined(isolate));
 	}
 
@@ -81,12 +80,33 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 	cmd_ln_t* config = BuildConfig(options);
 	instance->ps = ps_init(config);
 
-	// Set callback method
-	Local<Function> cb = Local<Function>::Cast(args[1]);
-	instance->callback.Reset(isolate, cb);
+
+	// Initialize the callback functions
+	Handle<Function> emptyFoo = Handle<Function>::Handle();
+	if (args.Length() >= 2) {
+		if(!args[1]->IsFunction()) {
+			isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Expected hypothesis to be a function")));
+			args.GetReturnValue().Set(Undefined(isolate));
+		} else {
+			// Set hypothesis from arguments
+			Local<Function> hypothesis = Local<Function>::Cast(args[1]);
+			instance->hypCallback.Reset(isolate, hypothesis);;
+		}	
+	} else {
+		instance->hypCallback.Reset(isolate, emptyFoo);
+	}
+
+	// Init the other callback functions empty
+	instance->hypFinalCallback.Reset(isolate, emptyFoo);
+	instance->startCallback.Reset(isolate, emptyFoo);
+	instance->stopCallback.Reset(isolate, emptyFoo);
+	instance->speechDetectedCallback.Reset(isolate, emptyFoo);
+	instance->silenceDetectedCallback.Reset(isolate, emptyFoo);
 
 	// Set processing to false initially
 	instance->processing = false;
+	// Set silenceDetection to true initially
+	instance->silenceDetection = true;
 
 	instance->Wrap(args.Holder());
 
@@ -132,9 +152,106 @@ void Recognizer::Reconfig(const FunctionCallbackInfo<Value>& args) {
 
 	// Overwrite callback method
 	Local<Function> cb = Local<Function>::Cast(args[1]);
-	instance->callback.Reset(isolate, cb);
+	instance->hypCallback.Reset(isolate, cb);
 
 	args.GetReturnValue().Set(args.Holder());
+}
+
+void Recognizer::SilenceDetection(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
+	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
+
+	if(args.Length() < 1) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected boolean")));
+		args.GetReturnValue().Set(Undefined(isolate));
+	}
+
+	if(!args[0]->IsBoolean()) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected enabled to be a boolean")));
+		args.GetReturnValue().Set(Undefined(isolate));
+	}
+
+	instance->silenceDetection = args[0]->BooleanValue();
+}
+
+void Recognizer::On(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
+	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
+
+	if(args.Length() < 2) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected event and callback")));
+		args.GetReturnValue().Set(Undefined(isolate));
+	}
+
+	if(!args[0]->IsString()) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected event to be a string")));
+		args.GetReturnValue().Set(Undefined(isolate));
+	}
+
+	if(!args[1]->IsFunction()) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected callback to be a function")));
+		args.GetReturnValue().Set(Undefined(isolate));
+	}
+
+	String::Utf8Value event(args[0]);
+	Local<Function> cb = Local<Function>::Cast(args[1]);
+
+	if(strcmp(*event, "hyp")==0) {
+		instance->hypCallback.Reset(isolate, cb);
+	} else 
+	if(strcmp(*event, "hypFinal")==0) {
+		instance->hypFinalCallback.Reset(isolate, cb);
+	} else
+	if(strcmp(*event, "start")==0) {
+		instance->startCallback.Reset(isolate, cb);
+	} else
+	if(strcmp(*event, "stop")==0) {
+		instance->stopCallback.Reset(isolate, cb);
+	} else
+	if(strcmp(*event, "speechDetected")==0) {
+		instance->speechDetectedCallback.Reset(isolate, cb);
+	} else
+	if(strcmp(*event, "silenceDetected")==0) {
+		instance->silenceDetectedCallback.Reset(isolate, cb);
+	}
+}
+
+void Recognizer::Off(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
+	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
+
+	if(args.Length() < 1) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected event and callback")));
+		args.GetReturnValue().Set(Undefined(isolate));
+	}
+	if(!args[0]->IsString()) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected event to be a string")));
+		args.GetReturnValue().Set(Undefined(isolate));
+	}
+	String::Utf8Value event(args[0]);
+
+	Handle<Function> emptyFoo = Handle<Function>::Handle();
+	if(strcmp(*event, "hyp")==0) {
+		instance->hypCallback.Reset(isolate, emptyFoo);
+	} else 
+	if(strcmp(*event, "hypFinal")==0) {
+		instance->hypFinalCallback.Reset(isolate, emptyFoo);
+	} else
+	if(strcmp(*event, "start")==0) {
+		instance->startCallback.Reset(isolate, emptyFoo);
+	} else
+	if(strcmp(*event, "stop")==0) {
+		instance->stopCallback.Reset(isolate, emptyFoo);
+	} else
+	if(strcmp(*event, "speechDetected")==0) {
+		instance->speechDetectedCallback.Reset(isolate, emptyFoo);
+	} else
+	if(strcmp(*event, "silenceDetected")==0) {
+		instance->silenceDetectedCallback.Reset(isolate, emptyFoo);
+	}
 }
 
 void Recognizer::AddKeyphraseSearch(const FunctionCallbackInfo<Value>& args) {
@@ -265,8 +382,14 @@ void Recognizer::Start(const FunctionCallbackInfo<Value>& args) {
 		if(result) {
 			isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to start PocketSphinx processing")));
 		} else {
-			//cout << "Utt successfully started..." << endl;
 			instance->processing = true;
+
+			// Trigger start callback
+			if(!instance->startCallback.IsEmpty()) {
+				Handle<Value> argv[0] = {};
+				Local<Function> cb = Local<Function>::New(isolate, instance->startCallback);
+				cb->Call(isolate->GetCurrentContext()->Global(), 0, argv);
+			}
 		}
 	} else {
 		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "PocketSphinx processing seems to run already")));
@@ -274,8 +397,8 @@ void Recognizer::Start(const FunctionCallbackInfo<Value>& args) {
 
 	args.GetReturnValue().Set(args.Holder());
 
-	// Repeat the first decoding after CMN estimations are calculated
-	//instance->isFirstDecoding = true;
+	// Reset silence detection
+	instance->speechDetected = false;
 }
 
 void Recognizer::Stop(const FunctionCallbackInfo<Value>& args) {
@@ -283,13 +406,15 @@ void Recognizer::Stop(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(instance->processing == true) {
-		// Fetch the final hypothesis if first arg is true
-		if(args.Length() > 0 && args[0]->IsBoolean() && args[0]->BooleanValue() == true) {
-			int32 score;
-			const char* hyp = ps_get_hyp(instance->ps, &score);
 
-			Handle<Value> argv[3] = { Null(isolate), hyp ? String::NewFromUtf8(isolate,hyp) : String::NewFromUtf8(isolate, ""), NumberObject::New(isolate,score)};
-			Local<Function> cb = Local<Function>::New(isolate, instance->callback);
+		// Fetch hyp with isFinal flag
+		// ..and trigger hypFinal callback
+		if(!instance->hypFinalCallback.IsEmpty()) {
+			int32 isFinal;
+			const char* hyp = ps_get_hyp_final(instance->ps, &isFinal);
+			Handle<Value> argv[3] = { Null(isolate), hyp ? String::NewFromUtf8(isolate,hyp) : String::NewFromUtf8(isolate, ""), NumberObject::New(isolate, isFinal)};
+		
+			Local<Function> cb = Local<Function>::New(isolate, instance->hypFinalCallback);
 			cb->Call(isolate->GetCurrentContext()->Global(), 3, argv);
 		}
 
@@ -300,6 +425,13 @@ void Recognizer::Stop(const FunctionCallbackInfo<Value>& args) {
 		} else {
 			//cout << "Utt successfully stopped..." << endl;
 			instance->processing = false;
+
+			// Trigger stop callback
+			if(!instance->stopCallback.IsEmpty()) {
+				Handle<Value> argv[0] = {};
+				Local<Function> cb = Local<Function>::New(isolate, instance->stopCallback);
+				cb->Call(isolate->GetCurrentContext()->Global(), 0, argv);
+			}
 		}
 	}
 
@@ -314,43 +446,24 @@ void Recognizer::Restart(const FunctionCallbackInfo<Value>& args) {
 		// Try stop processing
 		int result = ps_end_utt(instance->ps);
 		if(result) {
-			isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to restart PocketSphinx processing")));
+			isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to restart PocketSphinx processing")));
 		} else {
 			instance->processing = false;
-			//cout << "Utt successfully stopped..." << endl;
+
+			// Trigger stop callback
+			if(!instance->stopCallback.IsEmpty()) {
+				Handle<Value> argv[0] = {};
+				Local<Function> cb = Local<Function>::New(isolate, instance->stopCallback);
+				cb->Call(isolate->GetCurrentContext()->Global(), 0, argv);
+			}
 
 			// Restart it now that it's stopped
 			Start(args);
-			/*int result = ps_start_utt(instance->ps);
-			if(result) {
-				isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to start PocketSphinx processing")));
-			} else {
-				instance->processing = true;
-				cout << "Utt successfully restarted..." << endl;
-			}*/
-
 		}
 	} else {
 		// Start processing
 		Start(args);
-		/*
-		int result = ps_start_utt(instance->ps);
-		if(result) {
-			isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to start PocketSphinx processing")));
-		} else {
-			instance->processing = true;
-			cout << "Utt successfully started..." << endl;
-		}*/
 	}
-
-	/*int result = ps_start_utt(instance->ps);
-	if(result)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to start PocketSphinx processing")));
-
-	result = ps_end_utt(instance->ps);
-	if(result)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate,"Failed to restart PocketSphinx processing")));
-	*/
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -362,13 +475,13 @@ void Recognizer::Write(const FunctionCallbackInfo<Value>& args) {
 	Handle<Object> buffer = args[0]->ToObject();
 
 	if(!args.Length()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Expected a data buffer to be provided")));
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected a data buffer to be provided")));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
 	if(!node::Buffer::HasInstance(buffer)) {
-		Local<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate,"Expected data to be a buffer")) };
-		Local<Function> cb = Local<Function>::New(isolate, instance->callback);
+		Local<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate, "Expected data to be a buffer")) };
+		Local<Function> cb = Local<Function>::New(isolate, instance->hypCallback);
 		cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
 		args.GetReturnValue().Set(args.Holder());
 	}
@@ -400,14 +513,17 @@ void Recognizer::WriteSync(const FunctionCallbackInfo<Value>& args) {
 	Handle<Object> buffer = args[0]->ToObject();
 
 	if(!args.Length()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Expected a data buffer to be provided")));
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected a data buffer to be provided")));
 		return;
 	}
 
 	if(!node::Buffer::HasInstance(buffer)) {
-		Local<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate,"Expected data to be a buffer")) };
-		Local<Function> cb = Local<Function>::New(isolate, instance->callback);
-		cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
+		Local<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate, "Expected data to be a buffer")) };
+		
+		if(!instance->hypCallback.IsEmpty()) {
+			Local<Function> cb = Local<Function>::New(isolate, instance->hypCallback);
+			cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
+		}
 		return;
 	}
 
@@ -415,44 +531,48 @@ void Recognizer::WriteSync(const FunctionCallbackInfo<Value>& args) {
 	size_t length = node::Buffer::Length(buffer) / sizeof(int16);
 
 	if(ps_process_raw(instance->ps, data, length, FALSE, FALSE) < 0) {
-		Handle<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate,"Failed to process audio data")) };
-		Local<Function> cb = Local<Function>::New(isolate, instance->callback);
-		cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
-		args.GetReturnValue().Set(args.Holder());
-	}
+		Handle<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate, "Failed to process audio data")) };
 
-	// Repeat the first decoding after CMN estimations are calculated
-	/*if(ps_get_in_speech(instance->ps)==1 && instance->isFirstDecoding) {
-		instance->isFirstDecoding = false;
-		if(ps_process_raw(instance->ps, data, length, FALSE, FALSE) < 0) {
-			Handle<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate,"Failed to process audio data in second decoding phase")) };
-			Local<Function> cb = Local<Function>::New(isolate, instance->callback);
+		// Trigger hyp callback
+		if(!instance->hypCallback.IsEmpty()) {
+			Local<Function> cb = Local<Function>::New(isolate, instance->hypCallback);
 			cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
-			args.GetReturnValue().Set(args.Holder());
 		}
-	}*/
+		return;
+	}
 
 	int32 score;
 	const char* hyp = ps_get_hyp(instance->ps, &score);
 
-	//double t_speech;
-	//double t_cpu;
-	//double t_wall;
-
-	//ps_get_all_time(instance->ps, &t_speech, &t_cpu, &t_wall);
-
-	//double total_time = ps_get_n_frames(instance->ps) / 100.0;
-	//double silence_time = total_time - t_speech;
-
-	/*if (ps_get_in_speech(instance->ps)==1) {
-		cout << "Last buffer contained speech... times: speech(" << t_speech << ") of total(" << total_time << ") silence(" << silence_time << ")" << endl;
-	} else {
-		cout << "No speech in last buffer... times: speech(" << t_speech << ") of total(" << total_time << ") silence(" << silence_time << ")" << endl;
-	}*/
+	// Silence detection
+	if (instance->speechDetected == false && ps_get_in_speech(instance->ps)==1) {
+		instance->speechDetected = true;
+		// Trigger speechDetected callback
+		if(!instance->speechDetectedCallback.IsEmpty()) {
+			Handle<Value> argv[0] = {};
+			Local<Function> cb = Local<Function>::New(isolate, instance->speechDetectedCallback);
+			cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
+		}
+	}
+	if (instance->speechDetected == true && ps_get_in_speech(instance->ps)==0) {
+		// Trigger silenceDetected callback
+		if(!instance->silenceDetectedCallback.IsEmpty()) {
+			Handle<Value> argv[0] = {};
+			Local<Function> cb = Local<Function>::New(isolate, instance->silenceDetectedCallback);
+			cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
+		}
+		// Stop decoding when sd is enabled
+		if (instance->silenceDetection) {
+			Stop(args);
+		}
+	}
 
 	Handle<Value> argv[3] = { Null(isolate), hyp ? String::NewFromUtf8(isolate,hyp) : String::NewFromUtf8(isolate, ""), NumberObject::New(isolate,score)};
-	Local<Function> cb = Local<Function>::New(isolate, instance->callback);
-	cb->Call(isolate->GetCurrentContext()->Global(), 3, argv);
+	
+	if(!instance->hypCallback.IsEmpty()) {
+		Local<Function> cb = Local<Function>::New(isolate, instance->hypCallback);
+		cb->Call(isolate->GetCurrentContext()->Global(), 3, argv);
+	}
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -463,7 +583,7 @@ void Recognizer::AsyncWorker(uv_work_t* request) {
 
 	if(ps_process_raw(data->instance->ps, data->data, data->length, FALSE, FALSE)) {
 		data->hasException = TRUE;
-		data->exception = Exception::Error(String::NewFromUtf8(isolate,"Failed to process audio data"));
+		data->exception = Exception::Error(String::NewFromUtf8(isolate, "Failed to process audio data"));
 		return;
 	}
 
@@ -481,12 +601,16 @@ void Recognizer::AsyncAfter(uv_work_t* request) {
 
 	if(data->hasException) {
 		Handle<Value> argv[1] = { data->exception };
-		Local<Function> cb = Local<Function>::New(isolate, data->instance->callback);
-		cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
+		if(!data->instance->hypCallback.IsEmpty()) {
+			Local<Function> cb = Local<Function>::New(isolate, data->instance->hypCallback);
+			cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
+		}
 	} else {
 		Handle<Value> argv[3] = { Null(isolate), data->hyp ? String::NewFromUtf8(isolate,data->hyp) : String::NewFromUtf8(isolate, ""), NumberObject::New(isolate,data->score)};
-		Local<Function> cb = Local<Function>::New(isolate, data->instance->callback);
-		cb->Call(isolate->GetCurrentContext()->Global(), 3, argv);
+		if(!data->instance->hypCallback.IsEmpty()) {
+			Local<Function> cb = Local<Function>::New(isolate, data->instance->hypCallback);
+			cb->Call(isolate->GetCurrentContext()->Global(), 3, argv);
+		}
 	}
 }
 
@@ -549,8 +673,16 @@ cmd_ln_t* Recognizer::BuildConfig(Handle<Object> options) {
 				double num_val = double(val->NumberValue());
 				// Check if the number is a float or int
 				bool isInt = (val->IsInt32() || val->IsUint32());
-				if (isInt && strcmp(*utf8_key, "-samprate")!=0) {
-					//TODO: Fix the weird bug with -samprate 16000 always getting 
+				// Also some numbers have to be passed as float, otherwise ps configuration will crash
+				if (isInt && 
+					strcmp(*utf8_key, "-samprate")!=0 && 
+					strcmp(*utf8_key, "-lw")!=0 &&
+					strcmp(*utf8_key, "-fwdflatlw")!=0 &&
+					strcmp(*utf8_key, "-pip")!=0 &&
+					strcmp(*utf8_key, "-uw")!=0 &&
+					strcmp(*utf8_key, "-vad_threshold")!=0 &&
+					strcmp(*utf8_key, "-bestpathlw")!=0)
+				{					
 					cmd_ln_set_int_r(config, *utf8_key, (long)num_val);
 				} else {
 					cmd_ln_set_float_r(config, *utf8_key, num_val);

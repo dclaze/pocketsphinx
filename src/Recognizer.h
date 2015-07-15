@@ -22,6 +22,11 @@ private:
 	static void New(const v8::FunctionCallbackInfo<v8::Value>&);
 	static void Reconfig(const v8::FunctionCallbackInfo<v8::Value>&);
 
+	static void SilenceDetection(const v8::FunctionCallbackInfo<v8::Value>&);
+
+	static void On(const v8::FunctionCallbackInfo<v8::Value>&);
+	static void Off(const v8::FunctionCallbackInfo<v8::Value>&);
+
 	static void Start(const v8::FunctionCallbackInfo<v8::Value>&);
 	static void Stop(const v8::FunctionCallbackInfo<v8::Value>&);
 	static void Restart(const v8::FunctionCallbackInfo<v8::Value>&);
@@ -47,8 +52,20 @@ private:
 	static cmd_ln_t* BuildConfig(v8::Handle<v8::Object> options);
 
 	ps_decoder_t* ps;
-	v8::Persistent<v8::Function> callback;
+
+	v8::Persistent<v8::Function> hypCallback;
+	v8::Persistent<v8::Function> hypFinalCallback;
+	v8::Persistent<v8::Function> startCallback;
+	v8::Persistent<v8::Function> stopCallback;
+	v8::Persistent<v8::Function> speechDetectedCallback;
+	v8::Persistent<v8::Function> silenceDetectedCallback;
+
 	bool processing;
+
+	// Silence detection
+	bool silenceDetection;
+	bool speechDetected;
+
 	//bool isFirstDecoding;
 };
 

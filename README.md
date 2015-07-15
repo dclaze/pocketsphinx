@@ -20,8 +20,11 @@ var ps = new PocketSphinx.Recognizer({
 	'-dict': '/file/path',
 	'-nfft': 512,
 	'-remove_silence': false	
-}, function(err, hypothesis, score) {
+});
 
+ps.on('hyp', function(err, hypothesis, score){
+	if(err) console.error(err);
+	console.log('Hypothesis: ', hypothesis);
 });
 
 ps.addKeyphraseSearch("keyphrase_name", "keyphrase");
@@ -53,22 +56,39 @@ For more options you can look into the manual of pocketsphinx_continuous with `$
 
 The PocketSphinx Object itself has the properties
 
-* `Recognizer(options, callback)` - Creates a new Recognizer instance
+* `Recognizer(options, [hyp])` - Creates a new Recognizer instance
 * `modelDirectory` - The default model directory
 * `fromFloat(buffer)` - Resamples javascript audio buffers to use with PocketSphinx
 
 A Recognizer instance has the following methods:
 
+* `on(event, function)` - Attaches an event handler
+* `off(event)` - Removes an event handler
 * `start()` - Starts the decoder
 * `stop()` - Stops the decoder
 * `restart()` - Restarts the decoder
 * `reconfig(options, callback)` - Reconfigures the decoder without having to reload it
+* `silenceDetection(enabled)` - Disables or enables silence detection (Default: enabled)
 * `addKeyphraseSearch(name, keyphrase)` - Adds a keyphrase search
 * `addKeywordsSearch(name, keywordFile)` - Adds a keyword search
 * `addGrammarSearch(name, jsgfFile)` - Adds a jsgf search
 * `addNgramSearch(name, nGramFile)` - Adds a nGram search
 * `write(buffer)` - Decodes a complete audio buffer
 * `writeSync(buffer)` - Decodes the next audio buffer chunk
+
+## Events
+
+The following events are currently supported
+
+event | parameters | description
+------|------------|------------
+`hyp` | `(error, hypothesis, score)` | When a hypothesis is available. `score` is the path score corresponding to returned string.
+`hypFinal` | `(error, hypothesis, isFinal)` | When decoding stopped. `isFinal` indicates if hypothesis has reached final state in the grammar.
+`start` | `()` | When decoding started.
+`stop` | `()` | When decoding stopped.
+`speechDetected` | `()` | When speech was detected the first time.
+`silenceDetected` | `()` | When silence was detected after speech.
+
 
 ## Specify a search
 
@@ -84,8 +104,9 @@ Or you can pass e.g. a language model file, a jsgf grammar or a keyword file dir
 
 ```javascript
 var ps = new PocketSphinx.Recognizer({
-	'-lm': '/path/myFancyLanguageModel' // This adds an nGrammSearch
-}, function(err, hypothesis, score) {
+	'-lm': '/path/myFancyLanguageModel' // This adds an nGram search
+});
+ps.on('hyp', function(err, hypothesis, score) {
 	if(err) console.error(err);
 	console.log('Hypothesis: ', hypothesis);
 });

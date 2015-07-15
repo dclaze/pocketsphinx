@@ -19,8 +19,15 @@ io.on('connection', function(socket) {
 	// e.g.: -hmm as String, -nfft as Integet, -wbeam as Float and -remove_silence as Boolean
 	var sphinx = new PocketSphinx.Recognizer({
 		'-samprate': 44100,
-		'-nfft': 2048
-	}, function(err, hypothesis, score) {
+		'-nfft': 2048,
+		'-frate': 110
+	});
+
+	// Disable silence detection for the demo
+	sphinx.silenceDetection(false);
+
+	// Bind to the hyp event
+	sphinx.on('hyp', function(err, hypothesis, score) {
 		if(err) console.error(err);
 		socket.emit('utterance', { phrase: hypothesis, score: score });
 	});
