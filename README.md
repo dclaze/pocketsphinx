@@ -67,7 +67,7 @@ A Recognizer instance has the following methods:
 * `start()` - Starts the decoder
 * `stop()` - Stops the decoder
 * `restart()` - Restarts the decoder
-* `reconfig(options, callback)` - Reconfigures the decoder without having to reload it
+* `reconfig(options, [hyp])` - Reconfigures the decoder without having to reload it
 * `silenceDetection(enabled)` - Disables or enables silence detection (Default: enabled)
 * `addKeyphraseSearch(name, keyphrase)` - Adds a keyphrase search
 * `addKeywordsSearch(name, keywordFile)` - Adds a keyword search
@@ -82,12 +82,12 @@ The following events are currently supported
 
 event | parameters | description
 ------|------------|------------
-`hyp` | `(error, hypothesis, score)` | When a hypothesis is available. `score` is the path score corresponding to returned string.
-`hypFinal` | `(error, hypothesis, isFinal)` | When decoding stopped. `isFinal` indicates if hypothesis has reached final state in the grammar.
-`start` | `()` | When decoding started.
-`stop` | `()` | When decoding stopped.
-`speechDetected` | `()` | When speech was detected the first time.
-`silenceDetected` | `()` | When silence was detected after speech.
+`hyp` | `error, hypothesis, score` | When a hypothesis is available. `score` is the path score corresponding to returned string.
+`hypFinal` | `error, hypothesis, isFinal` | When decoding stopped. `isFinal` indicates if hypothesis has reached final state in the grammar.
+`start` | none | When decoding started.
+`stop` | none | When decoding stopped.
+`speechDetected` | none | When speech was detected the first time.
+`silenceDetected` | none | When silence was detected after speech.
 
 
 ## Specify a search

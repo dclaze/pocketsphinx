@@ -118,8 +118,8 @@ void Recognizer::Reconfig(const FunctionCallbackInfo<Value>& args) {
 	HandleScope scope(isolate);
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
-	if(args.Length() < 2) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected options and callback")));
+	if(args.Length() < 1) {
+		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected options at least")));
 		args.GetReturnValue().Set(Undefined(isolate));
 	}
 
@@ -128,9 +128,15 @@ void Recognizer::Reconfig(const FunctionCallbackInfo<Value>& args) {
 		args.GetReturnValue().Set(Undefined(isolate));
 	}
 
-	if(!args[1]->IsFunction()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected callback to be a function")));
-		args.GetReturnValue().Set(Undefined(isolate));
+	if(args.Length() >=2) {
+		if(!args[1]->IsFunction()) {
+			isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected hypothesis to be a function")));
+			args.GetReturnValue().Set(Undefined(isolate));
+		} else {
+			// Set hypothesis from arguments
+			Local<Function> hypothesis = Local<Function>::Cast(args[1]);
+			instance->hypCallback.Reset(isolate, hypothesis);;
+		}
 	}
 
 	// Remind state
