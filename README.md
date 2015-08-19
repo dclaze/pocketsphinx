@@ -62,7 +62,7 @@ The PocketSphinx Object itself has the properties
 
 A Recognizer instance has the following methods:
 
-* `on(event, function)` - Attaches an event handler
+* `on(event, function)` - Attaches an event handler (overwrites old event handlers for this event)
 * `off(event)` - Removes an event handler
 * `start()` - Starts the decoder
 * `stop()` - Stops the decoder
@@ -75,8 +75,8 @@ A Recognizer instance has the following methods:
 * `addNgramSearch(name, nGramFile)` - Adds a nGram search
 * `write(buffer)` - Decodes a complete audio buffer
 * `writeSync(buffer)` - Decodes the next audio buffer chunk
-* `lookupWords(array):object` - Returns an object with the properties `in` (an Object with words in dictionary and their phonetic transcription as value) and `out` (an Array with out of dictionary words)
-* `addWords(object)` - Adds the phonetic transcription from object to dictionary (keys = words, values = transcription)
+* `lookupWords(array):object` - Returns an object with the properties `in` (an object with words in dictionary and their phonetic transcription as value) and `out` (an array with out of dictionary words)
+* `addWords(object)` - Adds the phonetic transcription from object to dictionary (key = word, value = transcription)
 
 ## Events
 
