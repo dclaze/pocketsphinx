@@ -43,6 +43,9 @@ void Recognizer::Init(Handle<Object> exports) {
 	NODE_SET_PROTOTYPE_METHOD(tpl, "write", Write);
 	NODE_SET_PROTOTYPE_METHOD(tpl, "writeSync", WriteSync);
 
+	NODE_SET_PROTOTYPE_METHOD(tpl, "lookupWords", LookupWords);
+	NODE_SET_PROTOTYPE_METHOD(tpl, "addWords", AddWords);
+
 	// @deprecated fromFloat should be called directly like PocketSphinx.fromFloat(buffer)
 	NODE_SET_PROTOTYPE_METHOD(tpl, "fromFloat", FromFloat);
 	
@@ -85,7 +88,7 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 	Handle<Function> emptyFoo = Handle<Function>::Handle();
 	if (args.Length() >= 2) {
 		if(!args[1]->IsFunction()) {
-			isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate,"Expected hypothesis to be a function")));
+			isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected hypothesis to be a function")));
 			args.GetReturnValue().Set(Undefined(isolate));
 		} else {
 			// Set hypothesis from arguments
@@ -102,6 +105,7 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 	instance->stopCallback.Reset(isolate, emptyFoo);
 	instance->speechDetectedCallback.Reset(isolate, emptyFoo);
 	instance->silenceDetectedCallback.Reset(isolate, emptyFoo);
+	instance->errorCallback.Reset(isolate, emptyFoo);
 
 	// Set processing to false initially
 	instance->processing = false;
@@ -119,19 +123,25 @@ void Recognizer::Reconfig(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 1) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected options at least")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected options at least")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Incorrect number of arguments, expected options at least"));
 		args.GetReturnValue().Set(Undefined(isolate));
+		return;
 	}
 
 	if(!args[0]->IsObject()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected options to be an object")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected options to be an object")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected options to be an object"));
 		args.GetReturnValue().Set(Undefined(isolate));
+		return;
 	}
 
 	if(args.Length() >=2) {
 		if(!args[1]->IsFunction()) {
-			isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected hypothesis to be a function")));
+			//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected hypothesis to be a function")));
+			Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected hypothesis to be a function"));
 			args.GetReturnValue().Set(Undefined(isolate));
+			return;
 		} else {
 			// Set hypothesis from arguments
 			Local<Function> hypothesis = Local<Function>::Cast(args[1]);
@@ -147,7 +157,8 @@ void Recognizer::Reconfig(const FunctionCallbackInfo<Value>& args) {
 	Handle<Object> options = args[0]->ToObject();
 	cmd_ln_t* config = BuildConfig(options);
 	if(ps_reinit(instance->ps, config)<0) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Could not reinit decoder")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Could not reinit decoder")));
+		Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Could not reinit decoder"));
 		args.GetReturnValue().Set(Undefined(isolate));
 	} else {
 		// Restart decoding when the decoder was running before
@@ -169,13 +180,17 @@ void Recognizer::SilenceDetection(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 1) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected boolean")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected boolean")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Incorrect number of arguments, expected boolean"));
 		args.GetReturnValue().Set(Undefined(isolate));
+		return;
 	}
 
 	if(!args[0]->IsBoolean()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected enabled to be a boolean")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected enabled to be a boolean")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected enabled to be a boolean"));
 		args.GetReturnValue().Set(Undefined(isolate));
+		return;
 	}
 
 	instance->silenceDetection = args[0]->BooleanValue();
@@ -187,18 +202,24 @@ void Recognizer::On(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 2) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected event and callback")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected event and callback")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Incorrect number of arguments, expected event and callback"));
 		args.GetReturnValue().Set(Undefined(isolate));
+		return;
 	}
 
 	if(!args[0]->IsString()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected event to be a string")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected event to be a string")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected event to be a string"));
 		args.GetReturnValue().Set(Undefined(isolate));
+		return;
 	}
 
 	if(!args[1]->IsFunction()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected callback to be a function")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected callback to be a function")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected callback to be a function"));
 		args.GetReturnValue().Set(Undefined(isolate));
+		return;
 	}
 
 	String::Utf8Value event(args[0]);
@@ -221,6 +242,9 @@ void Recognizer::On(const FunctionCallbackInfo<Value>& args) {
 	} else
 	if(strcmp(*event, "silenceDetected")==0) {
 		instance->silenceDetectedCallback.Reset(isolate, cb);
+	} else
+	if(strcmp(*event, "error")==0) {
+		instance->errorCallback.Reset(isolate, cb);
 	}
 }
 
@@ -230,12 +254,16 @@ void Recognizer::Off(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 1) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected event and callback")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected event and callback")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Incorrect number of arguments, expected event and callback"));
 		args.GetReturnValue().Set(Undefined(isolate));
+		return;
 	}
 	if(!args[0]->IsString()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected event to be a string")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected event to be a string")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected event to be a string"));
 		args.GetReturnValue().Set(Undefined(isolate));
+		return;
 	}
 	String::Utf8Value event(args[0]);
 
@@ -257,6 +285,9 @@ void Recognizer::Off(const FunctionCallbackInfo<Value>& args) {
 	} else
 	if(strcmp(*event, "silenceDetected")==0) {
 		instance->silenceDetectedCallback.Reset(isolate, emptyFoo);
+	} else
+	if(strcmp(*event, "error")==0) {
+		instance->errorCallback.Reset(isolate, emptyFoo);
 	}
 }
 
@@ -266,13 +297,17 @@ void Recognizer::AddKeyphraseSearch(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 2) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and keyphrase")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and keyphrase")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and keyphrase"));
 		args.GetReturnValue().Set(args.Holder());
+		return;
 	}
 
 	if(!args[0]->IsString() || !args[1]->IsString()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and keyphrase to be strings")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and keyphrase to be strings")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected both name and keyphrase to be strings"));
 		args.GetReturnValue().Set(args.Holder());
+		return;
 	}
 
 	String::Utf8Value name(args[0]);
@@ -280,7 +315,8 @@ void Recognizer::AddKeyphraseSearch(const FunctionCallbackInfo<Value>& args) {
 
 	int result = ps_set_keyphrase(instance->ps, *name, *keyphrase);
 	if(result < 0)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add keyphrase search to recognizer")));
+		Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Failed to add keyphrase search to recognizer"));
+		//isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add keyphrase search to recognizer")));
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -291,13 +327,17 @@ void Recognizer::AddKeywordsSearch(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 2) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file"));
 		args.GetReturnValue().Set(args.Holder());
+		return;
 	}
 
 	if(!args[0]->IsString() || !args[1]->IsString()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and file to be strings")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and file to be strings")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected both name and file to be strings"));
 		args.GetReturnValue().Set(args.Holder());
+		return;
 	}
 
 	String::Utf8Value name(args[0]);
@@ -305,7 +345,8 @@ void Recognizer::AddKeywordsSearch(const FunctionCallbackInfo<Value>& args) {
 
 	int result = ps_set_kws(instance->ps, *name, *file);
 	if(result < 0)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add keywords search to recognizer")));
+		Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Failed to add keywords search to recognizer"));
+		//isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add keywords search to recognizer")));
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -316,12 +357,14 @@ void Recognizer::AddGrammarSearch(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 2) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file"));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
 	if(!args[0]->IsString() || !args[1]->IsString()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and file to be strings")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and file to be strings")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected both name and file to be strings"));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
@@ -330,7 +373,8 @@ void Recognizer::AddGrammarSearch(const FunctionCallbackInfo<Value>& args) {
 
 	int result = ps_set_jsgf_file(instance->ps, *name, *file);
 	if(result < 0)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add grammar search to recognizer")));
+		Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Failed to add grammar search to recognizer"));
+		//isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add grammar search to recognizer")));
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -341,13 +385,17 @@ void Recognizer::AddNgramSearch(const FunctionCallbackInfo<Value>& args) {
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
 	if(args.Length() < 2) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Incorrect number of arguments, expected name and file"));
 		args.GetReturnValue().Set(args.Holder());
+		return;
 	}
 
 	if(!args[0]->IsString() || !args[1]->IsString()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and file to be strings")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected both name and file to be strings")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected both name and file to be strings"));
 		args.GetReturnValue().Set(args.Holder());
+		return;
 	}
 
 	String::Utf8Value name(args[0]);
@@ -355,7 +403,8 @@ void Recognizer::AddNgramSearch(const FunctionCallbackInfo<Value>& args) {
 
 	int result = ps_set_lm_file(instance->ps, *name, *file);
 	if(result < 0)
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add Ngram search to recognizer")));
+		Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Failed to add Ngram search to recognizer"));
+		//isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to add Ngram search to recognizer")));
 
 	args.GetReturnValue().Set(args.Holder());
 }
@@ -386,7 +435,8 @@ void Recognizer::Start(const FunctionCallbackInfo<Value>& args) {
 	if(instance->processing == false) {
 		int result = ps_start_utt(instance->ps);
 		if(result) {
-			isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to start PocketSphinx processing")));
+			//isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to start PocketSphinx processing")));
+			Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Failed to start PocketSphinx processing"));
 		} else {
 			instance->processing = true;
 
@@ -398,7 +448,8 @@ void Recognizer::Start(const FunctionCallbackInfo<Value>& args) {
 			}
 		}
 	} else {
-		isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "PocketSphinx processing seems to run already")));
+		//isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "PocketSphinx processing seems to run already")));
+		Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "PocketSphinx processing seems to run already"));
 	}
 
 	args.GetReturnValue().Set(args.Holder());
@@ -427,7 +478,8 @@ void Recognizer::Stop(const FunctionCallbackInfo<Value>& args) {
 		// End the utterance
 		int result = ps_end_utt(instance->ps);
 		if(result){
-			isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to end PocketSphinx processing")));
+			//isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to end PocketSphinx processing")));
+			Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Failed to end PocketSphinx processing"));
 		} else {
 			//cout << "Utt successfully stopped..." << endl;
 			instance->processing = false;
@@ -452,7 +504,8 @@ void Recognizer::Restart(const FunctionCallbackInfo<Value>& args) {
 		// Try stop processing
 		int result = ps_end_utt(instance->ps);
 		if(result) {
-			isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to restart PocketSphinx processing")));
+			//isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Failed to restart PocketSphinx processing")));
+			Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Failed to restart PocketSphinx processing"));
 		} else {
 			instance->processing = false;
 
@@ -481,14 +534,17 @@ void Recognizer::Write(const FunctionCallbackInfo<Value>& args) {
 	Handle<Object> buffer = args[0]->ToObject();
 
 	if(!args.Length()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected a data buffer to be provided")));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected a data buffer to be provided")));
+		Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Expected a data buffer to be provided"));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
 	if(!node::Buffer::HasInstance(buffer)) {
+		/*
 		Local<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate, "Expected data to be a buffer")) };
 		Local<Function> cb = Local<Function>::New(isolate, instance->hypCallback);
-		cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
+		cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);*/
+		Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Expected data to be a buffer"));
 		args.GetReturnValue().Set(args.Holder());
 	}
 
@@ -519,17 +575,19 @@ void Recognizer::WriteSync(const FunctionCallbackInfo<Value>& args) {
 	Handle<Object> buffer = args[0]->ToObject();
 
 	if(!args.Length()) {
-		isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected a data buffer to be provided")));
+		Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Expected data to be a buffer"));
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected a data buffer to be provided")));
 		return;
 	}
 
 	if(!node::Buffer::HasInstance(buffer)) {
-		Local<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate, "Expected data to be a buffer")) };
+		//Local<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate, "Expected data to be a buffer")) };
+		Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Expected data to be a buffer"));
 		
-		if(!instance->hypCallback.IsEmpty()) {
+		/*if(!instance->hypCallback.IsEmpty()) {
 			Local<Function> cb = Local<Function>::New(isolate, instance->hypCallback);
 			cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
-		}
+		}*/
 		return;
 	}
 
@@ -537,13 +595,14 @@ void Recognizer::WriteSync(const FunctionCallbackInfo<Value>& args) {
 	size_t length = node::Buffer::Length(buffer) / sizeof(int16);
 
 	if(ps_process_raw(instance->ps, data, length, FALSE, FALSE) < 0) {
-		Handle<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate, "Failed to process audio data")) };
+		/*Handle<Value> argv[1] = { Exception::Error(String::NewFromUtf8(isolate, "Failed to process audio data")) };
 
 		// Trigger hyp callback
 		if(!instance->hypCallback.IsEmpty()) {
 			Local<Function> cb = Local<Function>::New(isolate, instance->hypCallback);
 			cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
-		}
+		}*/
+		Recognizer::Error(instance, isolate, String::NewFromUtf8(isolate, "Failed to process audio data"));
 		return;
 	}
 
@@ -581,6 +640,116 @@ void Recognizer::WriteSync(const FunctionCallbackInfo<Value>& args) {
 	}
 
 	args.GetReturnValue().Set(args.Holder());
+}
+
+void Recognizer::LookupWords(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
+	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
+
+	if(args.Length() < 1) {
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected options at least")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Incorrect number of arguments, expected words"));
+		args.GetReturnValue().Set(Undefined(isolate));
+		return;
+	}
+
+	if(!args[0]->IsArray()) {
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected options to be an object")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected words to be an array"));
+		args.GetReturnValue().Set(Undefined(isolate));
+		return;
+	}
+
+	vector<string> result;
+    Handle<Value> val;
+    if (args[0]->IsArray()) {
+		Handle<Array> jsArray = Handle<Array>::Cast(args[0]);
+		for (unsigned int i = 0; i < jsArray->Length(); i++) {
+			val = jsArray->Get(Integer::New(isolate, i)); 
+			result.push_back(string(*String::Utf8Value(val)));
+		}
+	}
+
+	vector<string> non_existing;
+	vector<string> existing;
+	vector<string> transcriptions;
+
+    for (unsigned int i = 0; i < result.size(); ++i)
+    {
+    	const char* token = result.at(i).c_str();
+    	const char* transcription = ps_lookup_word(instance->ps, token);
+
+    	if(transcription!=NULL) {
+    		existing.push_back(result.at(i));
+    		transcriptions.push_back(string(transcription));
+    	} else {
+			non_existing.push_back(result.at(i));
+    	}
+    }
+
+    Handle<Array> out_array = Array::New(isolate, int(non_existing.size()));
+    Handle<Object> in_object = Object::New(isolate);
+	for (unsigned int i = 0; i < non_existing.size(); ++i)
+	{
+		out_array->Set(i, String::NewFromUtf8(isolate, non_existing.at(i).c_str()));
+	}
+	for (unsigned int i = 0; i < existing.size(); ++i)
+	{
+		in_object->Set(
+			String::NewFromUtf8(isolate, existing.at(i).c_str()),
+			String::NewFromUtf8(isolate, transcriptions.at(i).c_str())
+		);
+	}
+
+	Handle<Object> returnObject = Object::New(isolate);
+	returnObject->Set(
+		String::NewFromUtf8(isolate,"in"),
+		in_object
+	);
+	returnObject->Set(
+		String::NewFromUtf8(isolate,"out"),
+		out_array
+	);
+
+    // Add the array to the return value
+    args.GetReturnValue().Set(returnObject);
+}
+
+void Recognizer::AddWords(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
+	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
+
+	if(args.Length() < 1) {
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Incorrect number of arguments, expected options at least")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Incorrect number of arguments, expected words"));
+		args.GetReturnValue().Set(Undefined(isolate));
+		return;
+	}
+
+	if(!args[0]->IsObject()) {
+		//isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected options to be an object")));
+		Recognizer::TypeError(instance, isolate, String::NewFromUtf8(isolate, "Expected words to be an object"));
+		args.GetReturnValue().Set(Undefined(isolate));
+		return;
+	}
+
+	Handle<Object> words = Handle<Object>::Cast(args[0]);
+	Local<Array> property_names = words->GetOwnPropertyNames();
+
+	for (unsigned int i = 0; i < property_names->Length(); ++i) {
+		Local<Value> key = property_names->Get(i);
+		Local<Value> value = words->Get(key);
+
+		if (key->IsString() && value->IsString()) {
+			String::Utf8Value utf8_key(key);
+			String::Utf8Value utf8_value(value);
+			//cout << *utf8_key << "->" << *utf8_value << endl;
+			int update = i == property_names->Length()-1 ? 1 : 0;
+			ps_add_word(instance->ps, *utf8_key, *utf8_value, update);
+		}
+	}
 }
 
 void Recognizer::AsyncWorker(uv_work_t* request) {
@@ -710,6 +879,21 @@ cmd_ln_t* Recognizer::BuildConfig(Handle<Object> options) {
 	}
 
 	return config;
+}
+
+void Recognizer::Error(Recognizer* instance, Isolate* isolate, const Handle<v8::String> msg) {
+	if(!instance->errorCallback.IsEmpty()) {
+		Handle<Value> argv[1] = { Exception::Error(msg) };
+		Local<Function> cb = Local<Function>::New(isolate, instance->errorCallback);
+		cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
+	}
+}
+void Recognizer::TypeError(Recognizer* instance, Isolate* isolate, const Handle<v8::String> msg) {
+	if(!instance->errorCallback.IsEmpty()) {
+		Handle<Value> argv[1] = { Exception::TypeError(msg) };
+		Local<Function> cb = Local<Function>::New(isolate, instance->errorCallback);
+		cb->Call(isolate->GetCurrentContext()->Global(), 1, argv);
+	}
 }
 
 void Recognizer::FromFloat(const FunctionCallbackInfo<Value>& args) {

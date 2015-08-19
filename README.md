@@ -75,6 +75,8 @@ A Recognizer instance has the following methods:
 * `addNgramSearch(name, nGramFile)` - Adds a nGram search
 * `write(buffer)` - Decodes a complete audio buffer
 * `writeSync(buffer)` - Decodes the next audio buffer chunk
+* `lookupWords(array):object` - Returns an object with the properties `in` (an Object with words in dictionary and their phonetic transcription as value) and `out` (an Array with out of dictionary words)
+* `addWords(object)` - Adds the phonetic transcription from object to dictionary (keys = words, values = transcription)
 
 ## Events
 
