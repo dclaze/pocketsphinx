@@ -9,6 +9,8 @@
 		<div id="output">Waiting...</div>
 
 		<script type="text/javascript">
+			var audioInput, context, streamer;
+
 			navigator.getUserMedia = navigator.getUserMedia ||navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
 
 			if(navigator.getUserMedia) {
@@ -16,11 +18,11 @@
 				socket.on('ready', function() {
 					navigator.getUserMedia({ audio: true }, function(stream) {
 						var audioContext = window.AudioContext || window.webkitAudioContext;
-						var context = new audioContext();
-						var audioInput = context.createMediaStreamSource(stream);
+						context = new audioContext();
+						audioInput = context.createMediaStreamSource(stream);
 
 						var buffer = context.createBuffer(1, 2048, 44100);
-						var streamer = (context.createScriptProcessor || context.createJavaScriptNode).call(context, 2048, 1, 1);
+						streamer = (context.createScriptProcessor || context.createJavaScriptNode).call(context, 2048, 1, 1);
 						streamer.onaudioprocess = function(e) {
 							var data = e.inputBuffer.getChannelData(0);
 							socket.emit('audio', data.buffer);

@@ -85,7 +85,7 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 
 
 	// Initialize the callback functions
-	Handle<Function> emptyFoo = Handle<Function>::Handle();
+	Handle<Function> emptyFoo = Handle<Function>();
 	if (args.Length() >= 2) {
 		if(!args[1]->IsFunction()) {
 			isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expected hypothesis to be a function")));
@@ -267,7 +267,7 @@ void Recognizer::Off(const FunctionCallbackInfo<Value>& args) {
 	}
 	String::Utf8Value event(args[0]);
 
-	Handle<Function> emptyFoo = Handle<Function>::Handle();
+	Handle<Function> emptyFoo = Handle<Function>();
 	if(strcmp(*event, "hyp")==0) {
 		instance->hypCallback.Reset(isolate, emptyFoo);
 	} else 
