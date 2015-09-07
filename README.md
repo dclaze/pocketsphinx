@@ -77,6 +77,7 @@ A Recognizer instance has the following methods:
 * `writeSync(buffer)` - Decodes the next audio buffer chunk
 * `lookupWords(array):object` - Returns an object with the properties `in` (an object with words in dictionary and their phonetic transcription as value) and `out` (an array with out of dictionary words)
 * `addWords(object)` - Adds the phonetic transcription from object to dictionary (key = word, value = transcription)
+* `free()` - Releases all resources associated with the decoder.
 
 ## Events
 

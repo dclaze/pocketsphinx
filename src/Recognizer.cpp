@@ -26,6 +26,7 @@ void Recognizer::Init(Handle<Object> exports) {
 	tpl->Set(String::NewFromUtf8(isolate, "modelDirectory"), String::NewFromUtf8(isolate, MODELDIR));
 	tpl->PrototypeTemplate()->SetAccessor(String::NewFromUtf8(isolate, "search"), GetSearch, SetSearch);
 
+	NODE_SET_PROTOTYPE_METHOD(tpl, "free", Free);
 	NODE_SET_PROTOTYPE_METHOD(tpl, "reconfig", Reconfig);
 	NODE_SET_PROTOTYPE_METHOD(tpl, "silenceDetection", SilenceDetection);
 
@@ -115,6 +116,15 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 	instance->Wrap(args.Holder());
 
 	args.GetReturnValue().Set(args.Holder());
+}
+
+void Recognizer::Free(const FunctionCallbackInfo<Value>& args) {
+	Isolate* isolate = Isolate::GetCurrent();
+	HandleScope scope(isolate);
+	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
+
+	instance->processing = false;
+	ps_free(instance->ps);
 }
 
 void Recognizer::Reconfig(const FunctionCallbackInfo<Value>& args) {

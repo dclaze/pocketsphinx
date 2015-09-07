@@ -22,6 +22,7 @@ private:
 	~Recognizer();
 
 	static void New(const v8::FunctionCallbackInfo<v8::Value>&);
+	static void Free(const v8::FunctionCallbackInfo<v8::Value>&);
 	static void Reconfig(const v8::FunctionCallbackInfo<v8::Value>&);
 
 	static void SilenceDetection(const v8::FunctionCallbackInfo<v8::Value>&);
