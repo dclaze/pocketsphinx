@@ -4,7 +4,7 @@
   "description": "Node binding for continuous voice recoginition through pocketsphinx.",
   "repository": {
     "type": "git",
-    "url": "git://github.com/cmusphinx/node-pocketsphinx.git"
+    "url": "git://github.com/cmusphinx/pocketsphinx.git"
   },
   "main": "index.js",
   "scripts": {
