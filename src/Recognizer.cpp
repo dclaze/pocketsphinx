@@ -11,7 +11,11 @@ Recognizer::Recognizer() {
 }
 
 Recognizer::~Recognizer() {
-	ps_free(ps);
+	if(destructed == false) {
+		processing = false;
+		ps_free(ps);
+	}
+	destructed = true;
 }
 
 Persistent<Function> Recognizer::constructor;
@@ -108,6 +112,8 @@ void Recognizer::New(const FunctionCallbackInfo<Value>& args) {
 	instance->silenceDetectedCallback.Reset(isolate, emptyFoo);
 	instance->errorCallback.Reset(isolate, emptyFoo);
 
+	// Set destructed to false initially
+	instance->destructed = false;
 	// Set processing to false initially
 	instance->processing = false;
 	// Set silenceDetection to true initially
@@ -123,8 +129,11 @@ void Recognizer::Free(const FunctionCallbackInfo<Value>& args) {
 	HandleScope scope(isolate);
 	Recognizer* instance = node::ObjectWrap::Unwrap<Recognizer>(args.Holder());
 
-	instance->processing = false;
-	ps_free(instance->ps);
+	if(instance->destructed == false) {
+		instance->processing = false;
+		ps_free(instance->ps);
+	}
+	instance->destructed = true;
 }
 
 void Recognizer::Reconfig(const FunctionCallbackInfo<Value>& args) {

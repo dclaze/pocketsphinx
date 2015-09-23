@@ -70,6 +70,7 @@ private:
 	v8::Persistent<v8::Function> silenceDetectedCallback;
 	v8::Persistent<v8::Function> errorCallback;
 
+	bool destructed;
 	bool processing;
 
 	// Silence detection
