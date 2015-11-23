@@ -932,7 +932,7 @@ void Recognizer::FromFloat(const FunctionCallbackInfo<Value>& args) {
 	float* data = reinterpret_cast<float*>(node::Buffer::Data(args[0]));
 	size_t length = node::Buffer::Length(args[0]) / sizeof(float);
 
-	Local<Object> slowBuffer = node::Buffer::New(length * sizeof(int16));
+	Local<Object> slowBuffer = node::Buffer::New(isolate, length * sizeof(int16)).ToLocalChecked();
 	int16* slowBufferData = reinterpret_cast<int16*>(node::Buffer::Data(slowBuffer));
 
 	//args.GetReturnValue().Set(args.Holder());
